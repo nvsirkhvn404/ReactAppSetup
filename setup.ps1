@@ -1,176 +1,70 @@
 # Stop on first error
 $ErrorActionPreference = "Stop"
 
-# ---------- Helpers ----------
-
-function Write-Banner {
-    Write-Host ""
-    Write-Host "───────────────────────────────────────────────" -ForegroundColor Cyan
-    Write-Host "        Nasir React Setup — v1.0" -ForegroundColor Yellow
-    Write-Host "   Vite + Tailwind CSS + shadcn + Poppins" -ForegroundColor Yellow
-    Write-Host "───────────────────────────────────────────────" -ForegroundColor Cyan
-    Write-Host ""
-}
-
-function Write-Step($msg) {
-    Write-Host "==> $msg" -ForegroundColor Cyan
-}
-
-function Fail-Step($msg, $err) {
-    Write-Host "❌ $msg failed:" -ForegroundColor Red
-    Write-Host "   $($err.Exception.Message)" -ForegroundColor DarkRed
-    throw $err
-}
-
-function Ensure-Command($name) {
-    if (-not (Get-Command $name -ErrorAction SilentlyContinue)) {
-        throw "Required command '$name' is not available in PATH."
-    }
-}
-
-function Ensure-EmptyFolder($path) {
-    if (Test-Path $path) {
-        $items = Get-ChildItem -Path $path -Force | Where-Object { $_.Name -notin '.', '..' }
-        if ($items.Count -gt 0) {
-            throw "Project folder '$path' is not empty. Run this in an empty folder."
-        }
-    }
-}
-
-function Ensure-TemplateFile($templateRoot, $name) {
-    $full = Join-Path $templateRoot $name
-    if (-not (Test-Path $full)) {
-        throw "Template file '$name' not found at '$templateRoot'."
-    }
-    return $full
-}
-
-# ---------- Start ----------
-
-Write-Banner
-
-$templateRoot = $PSScriptRoot
-$projectRoot  = Get-Location
-
-Write-Host "Template: $templateRoot" -ForegroundColor DarkGray
-Write-Host "Project:  $projectRoot"  -ForegroundColor DarkGray
+Write-Host ""
+Write-Host "───────────────────────────────────────────────" -ForegroundColor Cyan
+Write-Host "        Nasir React Setup — v1.0" -ForegroundColor Yellow
+Write-Host "   Vite + Tailwind CSS + shadcn + Poppins" -ForegroundColor Yellow
+Write-Host "───────────────────────────────────────────────" -ForegroundColor Cyan
 Write-Host ""
 
-try {
-    # 0. Basic checks
-    Write-Step "Checking required commands (node, npm, npx)..."
-    Ensure-Command "node"
-    Ensure-Command "npm"
-    Ensure-Command "npx"
+# The folder where the script lives (your template folder)
+$templateRoot = $PSScriptRoot
+# The folder where you're creating the project (where you run the script from)
+$projectRoot = Get-Location
 
-    Write-Step "Verifying project folder is empty..."
-    Ensure-EmptyFolder $projectRoot
+Write-Host "Template folder: $templateRoot" -ForegroundColor DarkGray
+Write-Host "Project folder:  $projectRoot" -ForegroundColor DarkGray
+Write-Host ""
 
-    # 1. Create Vite + React app
-    Write-Step "Creating Vite + React app..."
-    try {
-        "n" | npx create-vite@latest ./ -- --template react --skip-git
-    } catch {
-        Fail-Step "Create Vite project" $_
-    }
+# 1. Create Vite + React app in the current project folder
+Write-Host "==> Creating Vite + React app..." -ForegroundColor Cyan
+"n" | npx create-vite@latest ./ -- --template react --skip-git
 
-    # 2. Install base dependencies
-    Write-Step "Installing npm dependencies..."
-    try {
-        npm install
-    } catch {
-        Fail-Step "npm install" $_
-    }
+# 2. Run initial npm install
+Write-Host "==> Running npm install..." -ForegroundColor Cyan
+npm install
 
-    # 3. Copy config files (vite + jsconfig)
-    Write-Step "Copying template config files..."
-    try {
-        $viteConfigTemplate = Ensure-TemplateFile $templateRoot "vite.config.js"
-        $jsConfigTemplate   = Ensure-TemplateFile $templateRoot "jsconfig.json"
+# 3. Copy config files BEFORE Tailwind install
+Write-Host "==> Copying template config files (vite.config.js, jsconfig.json)..." -ForegroundColor Cyan
+Copy-Item (Join-Path $templateRoot "vite.config.js") -Destination (Join-Path $projectRoot "vite.config.js") -Force
+Copy-Item (Join-Path $templateRoot "jsconfig.json") -Destination (Join-Path $projectRoot "jsconfig.json") -Force
 
-        Copy-Item $viteConfigTemplate -Destination (Join-Path $projectRoot "vite.config.js") -Force
-        Copy-Item $jsConfigTemplate   -Destination (Join-Path $projectRoot "jsconfig.json") -Force
-    } catch {
-        Fail-Step "Copy config files" $_
-    }
+# 4. Install Tailwind + Vite plugin
+Write-Host "==> Installing Tailwind + @tailwindcss/vite..." -ForegroundColor Cyan
+npm install tailwindcss @tailwindcss/vite
 
-    # 4. Install Tailwind + Vite plugin
-    Write-Step "Installing Tailwind + @tailwindcss/vite..."
-    try {
-        npm install tailwindcss @tailwindcss/vite
-    } catch {
-        Fail-Step "Install Tailwind" $_
-    }
+# 5. Replace src folder with your template src
+Write-Host "==> Replacing src folder with template src..." -ForegroundColor Cyan
+$projectSrc = Join-Path $projectRoot "src"
+$templateSrc = Join-Path $templateRoot "src"
 
-    # 5. Replace src with template src
-    Write-Step "Replacing src folder with template src..."
-    try {
-        $projectSrc  = Join-Path $projectRoot "src"
-        $templateSrc = Join-Path $templateRoot "src"
-
-        if (-not (Test-Path $templateSrc)) {
-            throw "Template 'src' folder not found at '$templateSrc'."
-        }
-
-        if (Test-Path $projectSrc) {
-            Remove-Item $projectSrc -Recurse -Force
-        }
-
-        Copy-Item $templateSrc -Destination $projectSrc -Recurse
-    } catch {
-        Fail-Step "Replace src" $_
-    }
-
-    # 6. Init shadcn/ui
-    Write-Step "Initializing shadcn/ui (base color: neutral)..."
-    try {
-        npx shadcn@latest init -y -b neutral
-    } catch {
-        Fail-Step "Initialize shadcn/ui" $_
-    }
-
-    # 7. Copy components.json
-    Write-Step "Applying components.json..."
-    try {
-        $componentsTemplate = Ensure-TemplateFile $templateRoot "components.json"
-        Copy-Item $componentsTemplate -Destination (Join-Path $projectRoot "components.json") -Force
-    } catch {
-        Fail-Step "Copy components.json" $_
-    }
-
-    # 8. Add shadcn button
-    Write-Step "Adding shadcn button component..."
-    try {
-        npx shadcn@latest add button
-    } catch {
-        Fail-Step "Add shadcn button" $_
-    }
-
-    # 9. Replace index.css with template version
-    Write-Step "Replacing src/index.css with template version..."
-    try {
-        $indexCssTemplate = Ensure-TemplateFile $templateRoot "index.css"
-        $projectIndexCss  = Join-Path $projectSrc "index.css"
-        Copy-Item $indexCssTemplate -Destination $projectIndexCss -Force
-    } catch {
-        Fail-Step "Replace index.css" $_
-    }
-
-    Write-Host ""
-    Write-Host "✅ Setup complete!" -ForegroundColor Green
-    Write-Host ""
-    Write-Host "Next steps:" -ForegroundColor Green
-    Write-Host "  npm run dev" -ForegroundColor Green
-    Write-Host ""
-
-    # 10. Optionally start dev server automatically
-    Write-Step "Starting dev server (Ctrl + C to stop)..."
-    npm run dev
+if (Test-Path $projectSrc) {
+    Remove-Item $projectSrc -Recurse -Force
 }
-catch {
-    Write-Host ""
-    Write-Host "❌ Setup failed." -ForegroundColor Red
-    Write-Host "   $($_.Exception.Message)" -ForegroundColor DarkRed
-    Write-Host ""
-    exit 1
-}
+
+Copy-Item $templateSrc -Destination $projectSrc -Recurse
+
+# 6. Init shadcn with neutral
+Write-Host "==> Initializing shadcn/ui (neutral)..." -ForegroundColor Cyan
+npx shadcn@latest init -y -b neutral
+
+# 7. Copy components.json AFTER Init shadcn
+Write-Host "==> Copying components.json..." -ForegroundColor Cyan
+Copy-Item (Join-Path $templateRoot "components.json") -Destination (Join-Path $projectRoot "components.json") -Force
+
+# 8. Adding a button component from shadcn
+Write-Host "==> Adding shadcn button component..." -ForegroundColor Cyan
+npx shadcn@latest add button
+
+# 9. Replace index.css with template version
+Write-Host "==> Replacing index.css with template version..." -ForegroundColor Cyan
+Copy-Item (Join-Path $templateRoot "index.css") -Destination (Join-Path $projectRoot "src\index.css") -Force
+
+# 10. Done / instructions
+Write-Host ""
+Write-Host "✅ Setup complete!" -ForegroundColor Green
+Write-Host ""
+Write-Host "Next steps:" -ForegroundColor Green
+Write-Host "  npm run dev" -ForegroundColor Green
+Write-Host ""
