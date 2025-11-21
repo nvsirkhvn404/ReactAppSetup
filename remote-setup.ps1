@@ -1,11 +1,9 @@
 # remote-setup.ps1
 $ErrorActionPreference = "Stop"
 
-# >>> CHANGE THESE IF NEEDED <<<
 $repoOwner = "nvsirkhvn404"
 $repoName  = "ReactAppSetup"
 $branch    = "main"
-# >>> ------------------------ <<<
 
 Write-Host ""
 Write-Host "Downloading setup files..." -ForegroundColor Cyan
@@ -54,3 +52,11 @@ finally {
 }
 
 Write-Host "Done." -ForegroundColor Green
+Write-Host ""
+Write-Host "Starting dev server (Ctrl + C to stop)..." -ForegroundColor Cyan
+Write-Host ""
+
+# Run dev server in the project folder
+Push-Location $projectRoot
+npm run dev
+Pop-Location
